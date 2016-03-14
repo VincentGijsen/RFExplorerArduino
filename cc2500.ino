@@ -113,6 +113,8 @@ void dump_radio_info(void)
 
 uint8_t CC2500_INIT(void) {
   cc2500_resetChip();
+  cc2500_resetChip();
+  cc2500_resetChip();
   Serial.println(F("PartNR: "));
 
   uint8_t i = SPI_Read(MRFI_CC2500_SPI_REG_PARTNUM );
@@ -143,7 +145,7 @@ uint8_t CC2500_INIT(void) {
   delay(10);
  // r = SPI_Strobe(MRFI_CC2500_SPI_STROBE_SNOP);
  // radio_status(r);
-  
+  /*
   Serial.println("Testing function" );
   //SPI_Write( MRFI_CC2500_SPI_REG_PKTLEN, TEST_VALUE );
   Serial.println("W" );
@@ -162,6 +164,7 @@ uint8_t CC2500_INIT(void) {
   } else {
     Serial.println("PKQlen_ok");
   }
+  */
 }
 
 uint8_t SPI_ReadFifo(uint8_t *data, uint8_t len)
