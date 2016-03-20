@@ -49,10 +49,24 @@ static const uint8_t radio_regs_config[][2] =
   { MRFI_CC2500_SPI_REG_FIFOTHR, SMARTRF_SETTING_FIFOTHR /*RX>8*/},
   { MRFI_CC2500_SPI_REG_PKTCTRL1, MRFI_CC2500_SPI_REG_PKTCTRL1/*1<<2*/ /*Append status, no addr check*/ },
   { /*MRFI_CC2500_SPI_REG_MCSM0, 1<<4|1<<2*/ },
-  //  { MRFI_CC2500_SPI_REG_PKTLEN, 16 },
+  //{ MRFI_CC2500_SPI_REG_PKTLEN, 16 },
   { MRFI_CC2500_SPI_REG_PATABLE, 0xfe },
 };
 
+\
+
+
+
+uint8_t getRadioBitStatus(uint8_t c) {
+  //Serial.print("raw: ");
+  // Serial.println(c, BIN);
+  uint8_t tVal = c << 1;
+  tVal = tVal >> 5;
+  //Serial.print("bit: ");
+  //Serial.println(tVal, DEC);
+
+  return tVal;
+}
 
 void radio_status(uint8_t stat) {
 
@@ -60,11 +74,11 @@ void radio_status(uint8_t stat) {
   Serial.print(stat, BIN);
   Serial.print(" ");
 
-  uint8_t tVal = stat << 1;
-  tVal = tVal >> 5;
+
   if (stat & 0x80) {
     Serial.print(F("Radio ERROR"));
   }
+  uint8_t tVal = getRadioBitStatus(stat);
 
   switch (tVal) {
     case 0: Serial.print(F("Radio IDLE")); break;
@@ -138,13 +152,13 @@ uint8_t CC2500_INIT(void) {
   Serial.println(F("Stroble SRX"));
 
   uint8_t r = SPI_Strobe(MRFI_CC2500_SPI_STROBE_SRX);
-  delay(3);  // Time needed to activate rx
+  delay(1);  // Time needed to activate rx
   radio_status(r);
 
   //check if we are in RX mode
   delay(10);
- // r = SPI_Strobe(MRFI_CC2500_SPI_STROBE_SNOP);
- // radio_status(r);
+  // r = SPI_Strobe(MRFI_CC2500_SPI_STROBE_SNOP);
+  // radio_status(r);
   /*
   Serial.println("Testing function" );
   //SPI_Write( MRFI_CC2500_SPI_REG_PKTLEN, TEST_VALUE );
@@ -165,6 +179,65 @@ uint8_t CC2500_INIT(void) {
     Serial.println("PKQlen_ok");
   }
   */
+}
+
+
+#define MRFI_RSSI_VALID_DELAY_US    1000
+
+void MRFI_STROBE_IDLE_AND_WAIT(void) {
+  SPI_Strobe( MRFI_CC2500_SPI_STROBE_SIDLE );
+  while (SPI_Strobe(MRFI_CC2500_SPI_STROBE_SNOP) & 0xF0) {}
+}
+
+
+void MRFI_RSSI_VALID_WAIT(void) {
+  {
+    int16_t dTime = MRFI_RSSI_VALID_DELAY_US;
+    do
+    {
+      if (SPI_Read(MRFI_CC2500_SPI_REG_PKTSTATUS) & ((PKTSTATUS_CCA | PKTSTATUS_CS)))
+      {
+        break;
+      }
+      _delay_us(64); /* sleep */
+      dTime -= 64;
+    } while (dTime > 0);
+  }
+}
+
+
+#define MRFI_RSSI_OFFSET 71
+
+void RxModeOff(void) {
+  //idle
+  MRFI_STROBE_IDLE_AND_WAIT();
+  //flush fifo
+  SPI_Strobe( MRFI_CC2500_SPI_STROBE_SFRX );
+}
+
+int8_t Mrfi_CalculateRssi(uint8_t rawValue)
+{
+  int16_t rssi;
+
+  /* The raw value is in 2's complement and in half db steps. Convert it to
+   * decimal taking into account the offset value.
+   */
+  if (rawValue >= 128)
+  {
+    rssi = (int16_t)(rawValue - 256) / 2 - MRFI_RSSI_OFFSET;
+  }
+  else
+  {
+    rssi = (rawValue / 2) - MRFI_RSSI_OFFSET;
+  }
+
+  /* Restrict this value to least value can be held in an 8 bit signed int */
+  if (rssi < -128)
+  {
+    rssi = -128;
+  }
+
+  return rssi;
 }
 
 uint8_t SPI_ReadFifo(uint8_t *data, uint8_t len)

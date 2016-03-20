@@ -68,7 +68,7 @@
 #define MRFI_CC2500_SPI_REG_VCO_VC_DAC   0x39      /*  VCO_VC_DAC ñ Current setting from PLL calibration module */
 #define MRFI_CC2500_SPI_REG_TXBYTES      0x3A      /*  TXBYTES    ñ Underflow and number of bytes */
 #define MRFI_CC2500_SPI_REG_RXBYTES      0x3B      /*  RXBYTES    ñ Overflow and number of bytes */
-                                                                                                                                                 
+
 /* burst write registers */
 #define MRFI_CC2500_SPI_REG_PATABLE      0x3E      /*  PATABLE - PA control settings table */
 #define MRFI_CC2500_SPI_REG_TXFIFO       0x3F      /*  TXFIFO  - Transmit FIFO */
@@ -92,5 +92,16 @@
 
 /**************************************************************************************************
  */
+
+#define STATE_IDLE 0x01
+#define STATE_CAL 0x08
+#define STATE_RX 0x0E
+#define STATE_MANCAL1 0x03
+#define STATE_MANCAL2 0x04
+#define STATE_MANCAL3 0x05
+
+/* register PKTSTATUS - state values*/
+#define PKTSTATUS_CS  0x40
+#define PKTSTATUS_CCA 0x10
 #endif
 

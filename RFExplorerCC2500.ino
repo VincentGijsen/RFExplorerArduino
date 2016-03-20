@@ -22,7 +22,9 @@ boolean stringComplete = false;  // whether the string is complete
 
 #define CHANNELS 205
 uint8_t results[CHANNELS];
-uint8_t calibration[CHANNELS][3];
+uint8_t calibration_FSCAL2 = 0;
+uint8_t calibration_FSCAL3 = 0;
+uint8_t calibration[CHANNELS];
 
 void setup() {
   pinMode(MOSI, OUTPUT);
@@ -40,23 +42,12 @@ void setup() {
   if (CC2500_INIT()) {
     Serial.println("Error starting receiver");
     //  for (;;);
+
+
   }
 
   dump_radio_info();
   inputString.reserve(200);
-
-  Serial.println(F("RSSI: "));
-
-
-  sweep_full(&results[0]);
-  Serial.println("Sweep Done" );
-  for (int i = 0; i < CHANNELS; i++) {
-    Serial.print(results[i]);
-    Serial.print(",");
-  }
-
-  Serial.println(" ");
-
 
   //Current_setup ->#C3-M:<Main_Model>, <Expansion_Model>, <Firmware_Version> <EOL>
   w(("#C2-M:004,255,01.12"));
@@ -80,6 +71,15 @@ void setup() {
 
   //  w(("#K0"));
   // callibrationDataHandler() ;
+  /*
+   Serial.println("WAITING FOREVER");
+   while(1){
+
+     }
+     */
+
+  delay(2000);
+  RxModeOff();
 }
 
 void dumpSamples(uint8_t *samples, uint8_t count) {
@@ -117,7 +117,7 @@ void loop() {
   // put your main code here, to run repeatedly:
   serialEvent(); //call the function
   if (stringComplete) {
-    Serial.println(inputString);
+    //  Serial.println(inputString);
     inputString = "";
     stringComplete = false;
   }
@@ -130,20 +130,47 @@ void w(char* s) {
 }
 
 void callibrationDataHandler() {
+  //disable auto-cal
+  SPI_Write( MRFI_CC2500_SPI_REG_MCSM0, 0x18);
+
   for (int x = 0; x < CHANNELS; x++) {
     Serial.print("Calibarating C:");
-    Serial.println(x, DEC);
-    SPI_Strobe( MRFI_CC2500_SPI_STROBE_SIDLE );  // enter IDLE mode (not needed except for autocal)
-    SPI_Write( MRFI_CC2500_SPI_REG_CHANNR, x); // Channel number. Default spacing is ~200KHz/channel
-    delay(1);
-    SPI_Strobe( MRFI_CC2500_SPI_STROBE_SRX ); // enter Rx mode (not needed except to start autocal)
-    delay(20);
+    Serial.print( x, DEC);
 
-    calibration[x][0] = (uint8_t)SPI_Read(MRFI_CC2500_SPI_REG_FSCAL0);
-    calibration[x][1] = (uint8_t)SPI_Read(MRFI_CC2500_SPI_REG_FSCAL1);
-    calibration[x][2] = (uint8_t)SPI_Read(MRFI_CC2500_SPI_REG_FSCAL2);
+    SPI_Strobe( MRFI_CC2500_SPI_STROBE_SIDLE );  // enter IDLE mode (not needed except for autocal)
+
+    SPI_Write( MRFI_CC2500_SPI_REG_CHANNR, x); // Channel number. Default spacing is ~200KHz/channel
+
+    SPI_Strobe(MRFI_CC2500_SPI_STROBE_SCAL); //run calibration
+
+    //Blijf in idle wachten
+    while (SPI_Read(MRFI_CC2500_SPI_REG_MARCSTATE) == STATE_IDLE) {
+      // make sure Radio reaches SCAL before while(!IDLE) is called
+      Serial.print("C");
+    }
+    while (SPI_Read(MRFI_CC2500_SPI_REG_MARCSTATE) != STATE_IDLE) {
+      // make sure Radio reaches SCAL before while(!IDLE) is called
+      Serial.print("R");
+    }
+
+    if (x == 0) {
+      // we need to store FSCAL2 & FSCAL3 once
+
+      calibration_FSCAL2 = (uint8_t)SPI_Read(MRFI_CC2500_SPI_REG_FSCAL2);
+      calibration_FSCAL3 = (uint8_t)SPI_Read(MRFI_CC2500_SPI_REG_FSCAL3);
+
+    }
+    calibration[x] = (uint8_t)SPI_Read(MRFI_CC2500_SPI_REG_FSCAL1);
+    Serial.print(" FSCAL2: ");
+    Serial.print( calibration_FSCAL2, HEX);
+    Serial.print(" FSCAL3: ");
+    Serial.print( calibration_FSCAL3, HEX);
+    Serial.print(" FSCAL1: ");
+    Serial.print( calibration[x] , HEX);
+    Serial.println("");
     SPI_Strobe( MRFI_CC2500_SPI_STROBE_SIDLE );  // enter IDLE mode (not needed except for autocal)
   }
+  Serial.println("calibration done");
 }
 
 
@@ -156,39 +183,47 @@ void sweep_full(uint8_t *data) {
 
   for (int i = 0; i < CHANNELS; i++)
   {
-   // Serial.println("-----");
-    SPI_Strobe( MRFI_CC2500_SPI_STROBE_SFRX);
-  //  Serial.println("srfx");
-    //delay(1);
-    SPI_Write( MRFI_CC2500_SPI_REG_CHANNR, i); // Channel number. Default spacing is ~200KHz/channel
-    //SPI_Write(MRFI_CC2500_SPI_REG_FSCAL0,  calibration[i][0]);
-    //SPI_Write(MRFI_CC2500_SPI_REG_FSCAL1,  calibration[i][1]);
-    //SPI_Write(MRFI_CC2500_SPI_REG_FSCAL2,  calibration[i][2]);
-    //SPI_Strobe( MRFI_CC2500_SPI_STROBE_SCAL);
-   // Serial.println("channelnr");
-   // delay(10);
-    r = SPI_Strobe( MRFI_CC2500_SPI_STROBE_SRX ); // enter Rx mode (not needed except to start autocal)
-    //SPI_Write( MRFI_CC2500_SPI_REG_CHANNR, i); // Channel number. Default spacing is ~200KHz/channel
-   //Serial.println("src strob");
-   //  radio_status(r);
-    delay(12);
 
-    //Serial.print(" RSSI: ");
-    //rssi_dec = (uint8_t)SPI_Read(MRFI_CC2500_SPI_REG_RSSI);
-    rssi_dec = (uint8_t)SPI_Read(MRFI_CC2500_SPI_REG_RSSI);
-    if (rssi_dec >= 128)
-      rssi_dBm = (int16_t)((int16_t)( rssi_dec - 256) / 2) - rssi_offset;
-    else
-      rssi_dBm = (rssi_dec / 2) - rssi_offset;
-
-    data[i] = (uint8_t)abs(rssi_dBm) * 2;
-   // Serial.print(rssi_dBm, DEC); // Cheap speed hack: write upper 7 bits of RSSI value (throw away LSB). Use LSB to signal start of 256-channel RSSI byte list
-
-    SPI_Strobe( MRFI_CC2500_SPI_STROBE_SIDLE );  // enter IDLE mode (not needed except for autocal)
-    _delay_us(100);
+    uint8_t rssi = measure( i, 200) ;
+    Serial.print("channel: ");
+    Serial.print(i);//"channel: ");
+    Serial.print(" " );
+    Serial.println(rssi);
   }
+
 }
 
+uint8_t measure(uint8_t channel, uint8_t maxWaitTime) {
+  // RxModeOff();
+  //FSCAL1 = preCalData[calBand][0];
+  //FSCAL2 = preCalData[calBand][1];
+  // FSCAL3 = preCalData[calBand][2];
+  // CHANNR = channel;
+  SPI_Strobe( MRFI_CC2500_SPI_STROBE_SFRX );
+  
+  SPI_Write( MRFI_CC2500_SPI_REG_CHANNR, channel);
+  SPI_Strobe(MRFI_CC2500_SPI_STROBE_SRX);
+  
+  MRFI_RSSI_VALID_WAIT();
+
+  // delay(12);
+  uint8_t reg_value = (uint8_t)SPI_Read(MRFI_CC2500_SPI_REG_RSSI); //GET RSSI
+/*
+  uint8_t rssi_dBm = 0;
+  uint8_t rssi_offset = 71;
+
+  uint8_t rssi_dec = (uint8_t)SPI_Read(MRFI_CC2500_SPI_REG_RSSI);
+  if (rssi_dec >= 128)
+    rssi_dBm = (int16_t)((int16_t)( rssi_dec - 256) / 2) - rssi_offset;
+  else
+    rssi_dBm = (rssi_dec / 2) - rssi_offset;
+
+ // SPI_Strobe(MRFI_CC2500_SPI_STROBE_SIDLE);
+ */ 
+  RxModeOff();
+  return Mrfi_CalculateRssi(reg_value);
+
+}
 
 
 
