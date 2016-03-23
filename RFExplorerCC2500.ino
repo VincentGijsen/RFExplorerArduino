@@ -20,7 +20,7 @@ String inputString = "";         // a string to hold incoming data
 boolean stringComplete = false;  // whether the string is complete
 
 
-#define CHANNELS 205
+#define CHANNELS 206
 uint8_t results[CHANNELS];
 uint8_t calibration_FSCAL2 = 0;
 uint8_t calibration_FSCAL3 = 0;
@@ -66,11 +66,13 @@ void setup() {
   //<Amp_Bottom>, <Sweep_Steps>, <ExpModuleActive>, <CurrentMode>, <Min_Freq>, <Max_Freq>, <Max_Span>, <RBW>, <AmpOffset>, <CalculatorMode> <EOL>
 
 
-
-  w(("#C2-F:2399999,0405465,0010,-120,0205,0,000,2399999,2483279,1000000,00406,0000,0000"));
+  //OFFSET is 071 per datasheet! check http://www.ti.com/lit/an/swra114d/swra114d.pdf
+  //RBW is 58khz
+  //w(("#C2-F:2399999,0405465,0010,-120,0205,0,000,2399999,2483279,1000000,00406,-071,0000"));
+  w(("#C2-F:2399999,0405465,0010,-120,0205,0,000,2399999,2483279,1000000,00058,0000,0000"));
 
   //  w(("#K0"));
-  // callibrationDataHandler() ;
+  callibrationDataHandler() ;
   /*
    Serial.println("WAITING FOREVER");
    while(1){
@@ -89,10 +91,11 @@ void dumpSamples(uint8_t *samples, uint8_t count) {
   Serial.write('$');
   Serial.write('S');
   //Serial.print("$S0239");
+  //write leng of pending samples
   Serial.write(count);
   for (int x = 0; x < count; x++) {
-    byte calc = (x * 2) % 20;
-    Serial.write(samples[x]);
+    //  byte calc = (x * 2) % 20;
+    Serial.write(samples[x] * 2); //multiply times 2 as expected by RF-explorer
   }
   Serial.print("\r\n");
 }
@@ -113,7 +116,7 @@ void testDump() {
 void loop() {
   //  testDump();
   sweep_full(&results[0]);
-  dumpSamples(&results[0], CHANNELS);
+  //dumpSamples(&results[0], CHANNELS);
   // put your main code here, to run repeatedly:
   serialEvent(); //call the function
   if (stringComplete) {
@@ -131,7 +134,7 @@ void w(char* s) {
 
 void callibrationDataHandler() {
   //disable auto-cal
-  SPI_Write( MRFI_CC2500_SPI_REG_MCSM0, 0x18);
+  SPI_Write( MRFI_CC2500_SPI_REG_MCSM0, 0x08);
 
   for (int x = 0; x < CHANNELS; x++) {
     Serial.print("Calibarating C:");
@@ -181,47 +184,65 @@ void sweep_full(uint8_t *data) {
   uint8_t rssi_offset = 72;
   uint8_t r = 0;
 
-  for (int i = 0; i < CHANNELS; i++)
+  Serial.write('$');
+  Serial.write('S');
+  //Serial.print("$S0239");
+  //write leng of pending samples
+  Serial.write(CHANNELS);
+
+  for (int channel = 0; channel < CHANNELS; channel++)
   {
 
-    uint8_t rssi = measure( i, 200) ;
+    //#define DBG
+    uint8_t rssi = measure( channel, 200) ;
+#ifdef DBG
+    //    results[channel] = rssi;
     Serial.print("channel: ");
-    Serial.print(i);//"channel: ");
+    Serial.print(channel );//"channel: ");
     Serial.print(" " );
     Serial.println(rssi);
+#endif
+#ifndef DBG
+    Serial.write(rssi * 2);
+#endif
   }
+  Serial.print("\r\n");
 
 }
 
 uint8_t measure(uint8_t channel, uint8_t maxWaitTime) {
   // RxModeOff();
-  //FSCAL1 = preCalData[calBand][0];
-  //FSCAL2 = preCalData[calBand][1];
-  // FSCAL3 = preCalData[calBand][2];
+  SPI_Write(MRFI_CC2500_SPI_REG_FSCAL1, calibration[channel]);
+  SPI_Write(MRFI_CC2500_SPI_REG_FSCAL2, calibration_FSCAL2);
+  SPI_Write(MRFI_CC2500_SPI_REG_FSCAL3, calibration_FSCAL3);
   // CHANNR = channel;
   SPI_Strobe( MRFI_CC2500_SPI_STROBE_SFRX );
-  
+
   SPI_Write( MRFI_CC2500_SPI_REG_CHANNR, channel);
   SPI_Strobe(MRFI_CC2500_SPI_STROBE_SRX);
-  
+
   MRFI_RSSI_VALID_WAIT();
 
   // delay(12);
   uint8_t reg_value = (uint8_t)SPI_Read(MRFI_CC2500_SPI_REG_RSSI); //GET RSSI
-/*
-  uint8_t rssi_dBm = 0;
+
+  int rssi_dBm = 0;
   uint8_t rssi_offset = 71;
+  //letop moet SIGNED worden ivm calculatie negatieve nummers!!
+  int temp = 0;
+  uint16_t rssi_dec = (uint16_t)SPI_Read(MRFI_CC2500_SPI_REG_RSSI);
+  if (rssi_dec >= 128) {
+    rssi_dBm = rssi_dec - 256;
+    rssi_dBm = rssi_dBm / 2;
+    rssi_dBm = rssi_dBm - rssi_offset;
+  }
+  else {
+    temp = (((int)rssi_dec) / 2) - rssi_offset;
 
-  uint8_t rssi_dec = (uint8_t)SPI_Read(MRFI_CC2500_SPI_REG_RSSI);
-  if (rssi_dec >= 128)
-    rssi_dBm = (int16_t)((int16_t)( rssi_dec - 256) / 2) - rssi_offset;
-  else
-    rssi_dBm = (rssi_dec / 2) - rssi_offset;
+  }
 
- // SPI_Strobe(MRFI_CC2500_SPI_STROBE_SIDLE);
- */ 
   RxModeOff();
-  return Mrfi_CalculateRssi(reg_value);
+  return (abs(rssi_dBm));
 
 }
 
