@@ -20,7 +20,9 @@ String inputString = "";         // a string to hold incoming data
 boolean stringComplete = false;  // whether the string is complete
 
 
-#define CHANNELS 206
+#define CHANNELS 250
+#define RSSI_OFFSET 72
+
 uint8_t results[CHANNELS];
 uint8_t calibration_FSCAL2 = 0;
 uint8_t calibration_FSCAL3 = 0;
@@ -50,7 +52,11 @@ void setup() {
   inputString.reserve(200);
 
   //Current_setup ->#C3-M:<Main_Model>, <Expansion_Model>, <Firmware_Version> <EOL>
+  //werkend!
   w(("#C2-M:004,255,01.12"));
+
+
+
   //Current_config -> #C2-F:<Start_Freq>, <Freq_Step>, <Amp_Top>,
   //<Amp_Bottom>, <Sweep_Steps>, <ExpModuleActive>, <CurrentMode>, <Min_Freq>, <Max_Freq>, <Max_Span>, <RBW>, <AmpOffset>, <CalculatorMode> <EOL>
   delay(500);
@@ -69,16 +75,20 @@ void setup() {
   //OFFSET is 071 per datasheet! check http://www.ti.com/lit/an/swra114d/swra114d.pdf
   //RBW is 58khz
   //w(("#C2-F:2399999,0405465,0010,-120,0205,0,000,2399999,2483279,1000000,00406,-071,0000"));
-  w(("#C2-F:2399999,0405465,0010,-120,0205,0,000,2399999,2483279,1000000,00058,0000,0000"));
+  //WORKING line!
+  w(("#C2-F:2399999,0332519,0010,-120,0250,0,000,2399999,2483279,1000000,00203,0000,0000"));
 
+  //test line for wifi:
+  //w(("#C2-F:2399999,6000000,0010,-120,0013,0,002,2399999,2483279,1000000,00203,0000,0000"));
   //  w(("#K0"));
   callibrationDataHandler() ;
-  /*
-   Serial.println("WAITING FOREVER");
-   while(1){
-
-     }
-     */
+/*
+  Serial.println("WAITING FOREVER");
+  while (1) {
+    testDump(13);
+    delay(2000);
+  }
+*/
 
   delay(2000);
   RxModeOff();
@@ -100,30 +110,33 @@ void dumpSamples(uint8_t *samples, uint8_t count) {
   Serial.print("\r\n");
 }
 
-void testDump() {
+void testDump(uint8_t count) {
+  //haalt +- 90/s loop
   byte cc = 0xFF;
 
   Serial.write('$');
   Serial.write('S');
-  Serial.write(cc);
-  for (int x = 0; x < cc; x++) {
-    byte calc = (x * 2) % 20;
+  Serial.write(count);
+  for (int x = 0; x < count; x++) {
+    byte calc = random(1,180);//) % 30;
     Serial.write(calc);
   }
   Serial.print("\r\n");
 }
 
 void loop() {
-  //  testDump();
-  sweep_full(&results[0]);
+  //testDump();
+  sweep_full();
   //dumpSamples(&results[0], CHANNELS);
   // put your main code here, to run repeatedly:
-  serialEvent(); //call the function
+  //serialEvent(); //call the function
+  /*
   if (stringComplete) {
     //  Serial.println(inputString);
     inputString = "";
     stringComplete = false;
   }
+  */
   //  delay(1000);
 }
 
@@ -177,24 +190,26 @@ void callibrationDataHandler() {
 }
 
 
-void sweep_full(uint8_t *data) {
+void sweep_full() {
 
   uint8_t rssi_dec;
   int16_t rssi_dBm;
-  uint8_t rssi_offset = 72;
+
   uint8_t r = 0;
 
   Serial.write('$');
   Serial.write('S');
   //Serial.print("$S0239");
   //write leng of pending samples
-  Serial.write(CHANNELS);
 
+  Serial.write(CHANNELS);
+  uint8_t lastVal = 0;
   for (int channel = 0; channel < CHANNELS; channel++)
   {
 
     //#define DBG
     uint8_t rssi = measure( channel, 200) ;
+
 #ifdef DBG
     //    results[channel] = rssi;
     Serial.print("channel: ");
@@ -203,7 +218,15 @@ void sweep_full(uint8_t *data) {
     Serial.println(rssi);
 #endif
 #ifndef DBG
-    Serial.write(rssi * 2);
+    // software expects 1/2 resolution
+    if (rssi != 0 ) {
+      Serial.write(rssi * 2);
+      lastVal = rssi;
+    }
+    else {
+      Serial.write(lastVal);
+    }
+
 #endif
   }
   Serial.print("\r\n");
@@ -216,7 +239,7 @@ uint8_t measure(uint8_t channel, uint8_t maxWaitTime) {
   SPI_Write(MRFI_CC2500_SPI_REG_FSCAL2, calibration_FSCAL2);
   SPI_Write(MRFI_CC2500_SPI_REG_FSCAL3, calibration_FSCAL3);
   // CHANNR = channel;
-  SPI_Strobe( MRFI_CC2500_SPI_STROBE_SFRX );
+  //  SPI_Strobe( MRFI_CC2500_SPI_STROBE_SFRX );
 
   SPI_Write( MRFI_CC2500_SPI_REG_CHANNR, channel);
   SPI_Strobe(MRFI_CC2500_SPI_STROBE_SRX);
@@ -227,17 +250,16 @@ uint8_t measure(uint8_t channel, uint8_t maxWaitTime) {
   uint8_t reg_value = (uint8_t)SPI_Read(MRFI_CC2500_SPI_REG_RSSI); //GET RSSI
 
   int rssi_dBm = 0;
-  uint8_t rssi_offset = 71;
   //letop moet SIGNED worden ivm calculatie negatieve nummers!!
   int temp = 0;
   uint16_t rssi_dec = (uint16_t)SPI_Read(MRFI_CC2500_SPI_REG_RSSI);
   if (rssi_dec >= 128) {
     rssi_dBm = rssi_dec - 256;
     rssi_dBm = rssi_dBm / 2;
-    rssi_dBm = rssi_dBm - rssi_offset;
+    rssi_dBm = rssi_dBm - RSSI_OFFSET;
   }
   else {
-    temp = (((int)rssi_dec) / 2) - rssi_offset;
+    temp = (((int)rssi_dec) / 2) - RSSI_OFFSET;
 
   }
 

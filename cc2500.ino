@@ -6,12 +6,12 @@
 static const uint8_t radio_regs_config[][2] =
 {
   /* internal radio configuration */
-  { MRFI_CC2500_SPI_REG_IOCFG0,    SMARTRF_SETTING_IOCFG0   },
-  { MRFI_CC2500_SPI_REG_IOCFG1,    SMARTRF_SETTING_IOCFG1   },
+ // { MRFI_CC2500_SPI_REG_IOCFG0,    SMARTRF_SETTING_IOCFG0   },
+//  { MRFI_CC2500_SPI_REG_IOCFG1,    SMARTRF_SETTING_IOCFG1   },
   { MRFI_CC2500_SPI_REG_IOCFG2,    SMARTRF_SETTING_IOCFG2   },
   { MRFI_CC2500_SPI_REG_MCSM0,     SMARTRF_SETTING_MCSM0 /*0x10 | (SMARTRF_SETTING_MCSM0 & (1<<2|1<<3)) */   },
-  { MRFI_CC2500_SPI_REG_MCSM1,     SMARTRF_SETTING_MCSM1    },
-  { MRFI_CC2500_SPI_REG_PKTLEN,    SMARTRF_SETTING_PKTLEN   },
+//  { MRFI_CC2500_SPI_REG_MCSM1,     SMARTRF_SETTING_MCSM1    },
+//  { MRFI_CC2500_SPI_REG_PKTLEN,    SMARTRF_SETTING_PKTLEN   },
   { MRFI_CC2500_SPI_REG_PKTCTRL0,  MRFI_CC2500_SPI_REG_PKTCTRL0},
   { MRFI_CC2500_SPI_REG_PKTCTRL1,  MRFI_CC2500_SPI_REG_PKTCTRL1},
   /*  { MRFI_CC2500_SPI_REG_PATABLE,   SMARTRF_SETTING_PATABLE0 }, */
@@ -45,8 +45,8 @@ static const uint8_t radio_regs_config[][2] =
   { MRFI_CC2500_SPI_REG_TEST0,     SMARTRF_SETTING_TEST0    },
 
   /*JMK:*/
-  { MRFI_CC2500_SPI_REG_IOCFG0, SMARTRF_SETTING_IOCFG0 },
-  { MRFI_CC2500_SPI_REG_FIFOTHR, SMARTRF_SETTING_FIFOTHR /*RX>8*/},
+//  { MRFI_CC2500_SPI_REG_IOCFG0, SMARTRF_SETTING_IOCFG0 },
+//  { MRFI_CC2500_SPI_REG_FIFOTHR, SMARTRF_SETTING_FIFOTHR /*RX>8*/},
   { MRFI_CC2500_SPI_REG_PKTCTRL1, MRFI_CC2500_SPI_REG_PKTCTRL1/*1<<2*/ /*Append status, no addr check*/ },
   { /*MRFI_CC2500_SPI_REG_MCSM0, 1<<4|1<<2*/ },
   //{ MRFI_CC2500_SPI_REG_PKTLEN, 16 },
@@ -199,8 +199,8 @@ void MRFI_RSSI_VALID_WAIT(void) {
       {
         break;
       }
-      _delay_us(64); /* sleep */
-      dTime -= 64;
+      _delay_us(10); /* sleep */
+      dTime -= 10;
     } while (dTime > 0);
   }
 }
@@ -273,7 +273,7 @@ uint8_t SPI_Strobe(uint8_t reg)
   digitalWrite(CS, LOW);                // CSN low, initialize SPI communication...
   while (digitalRead(MISO) == HIGH) {};
   SPI.transfer(reg | CC2500_READ_SINGLE);                         // Select register to read from..
-  _delay_us(10);
+  //_delay_us(10);
   reg_val = SPI.transfer(0);                 // ..then read register value
   digitalWrite(CS, HIGH);                // CSN high, terminate SPI communication
   return (reg_val);                    // return register value
