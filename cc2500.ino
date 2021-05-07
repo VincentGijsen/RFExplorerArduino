@@ -173,7 +173,6 @@ uint8_t CC2500_INIT(void) {
     Serial.print(TEST_VALUE, HEX);
     Serial.print(" " );
     Serial.println(r, HEX);
-
     // return 1;
   } else {
     Serial.println("PKQlen_ok");
@@ -199,8 +198,8 @@ void MRFI_RSSI_VALID_WAIT(void) {
       {
         break;
       }
-      _delay_us(10); /* sleep */
-      dTime -= 10;
+      _delay_us(1); /* sleep */
+      dTime -= 1;
     } while (dTime > 0);
   }
 }
